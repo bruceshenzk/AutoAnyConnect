@@ -13,8 +13,9 @@ The program is created under an [answer](https://superuser.com/questions/649614/
 ```
 echo "HOST\nUSERNAME\nPASSWORD" > vpn_config
 ```
-* Start the program by entering `python aac.py`
+* If you want to have multiple configurations (VPN settings), change "vpn_config" to proper names.
+* Start the program by entering `./aac.py [config]` or `python aac.py [config]`. The default config is vpn_config.
 * Stop by hitting Ctrl + C, and wait for the program to disconnecting the VPN service.
 
 # Works under Development
-Multiple config files
+Config directory
