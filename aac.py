@@ -10,6 +10,35 @@ parser = argparse.ArgumentParser()
 parser.add_argument("config", action='store')
 args = parser.parse_args()
 
+def disconnect():
+    p = subprocess.Popen(["/opt/cisco/anyconnect/bin/vpn", "disconnect"])
+    p.wait()
+
+def send_until(p, cmd, exp, st):
+    #print("send_until")
+
+    s = ''
+    line = ''
+    cnt = 1
+    while True:
+
+        while True:
+            c = p.stdout.read(1)
+            if c == '\x0a' or c == '\x0d':
+                line = s
+                s = ''
+                break
+            else:
+                s += c
+                if st in s:
+                    p.stdin.write(cmd)
+                    return
+
+        print("Line %d: \'%s\'" % (cnt, line))
+        if exp in line:
+            found_exp = True
+        cnt+=1
+
 def main():
     if os.path.exists(args.config):
         logger.info("Using config file", args.config)
@@ -22,44 +51,32 @@ def main():
             host = f.readline()[:-1]
             usr = f.readline()[:-1]
             pw = f.readline()[:-1]
-    
+
+    disconnect()
+
     # turn on Cisco Anyconnect VPN
-    #os.system("printf '"+usr+"\n"+pw+"\ny'|/opt/cisco/anyconnect/bin/vpn -s connect "+host)
-    p = subprocess.Popen("/opt/cisco/anyconnect/bin/vpn -s connect " + host, shell=True,
-            stdout=None, stdin=subprocess.PIPE)
+    p = subprocess.Popen(["/opt/cisco/anyconnect/bin/vpn", "-s"],
+            stdout=subprocess.PIPE, stdin=subprocess.PIPE)
 
-    time.sleep(2)
-    print("sending usr")
-    p.stdin.write(usr+'\n')
-    
-    time.sleep(2)
-    print("sending pw")
-    p.stdin.write(pw+'\n')
-    
-    time.sleep(2)
-    print("sending confirm")
-    p.stdin.write('y\n')
-
-    p.wait()
+    send_until(p, "connect %s\n" % host, "registered", "VPN> ")
+    send_until(p, "%s\n" % usr, "", "Username:")
+    send_until(p, "%s\n" % pw, "", "Password:")
+    send_until(p, "y\n", "", "accept?")
+    time.sleep(5)
 
     # keep process alive and check connecting state regularly
     try:
-            while True:
-                    time.sleep(20)
-                    output = str(subprocess.Popen("/opt/cisco/anyconnect/bin/vpn status", shell=True, stdout=subprocess.PIPE).stdout.read())
-                    if ">> state: Disconnected" in output:
-                            print(">> Disconnected")
-                    elif ">> state: Connected" in output:
-                            print(">> Connected")
-                    else:
-                            print(">> Other")
-                            print(output)
+        while True:
+            p.stdin.write("status\n")
+            line = p.stdout.readline()
+            while "state" not in line:
+                line = p.stdout.readline()
+            print(line)
+            time.sleep(20)
 
     # Ctrl + C to disconnect
     except KeyboardInterrupt:
-            print("\nDisconnecting:\n")
-            p = subprocess.Popen("/opt/cisco/anyconnect/bin/vpn disconnect", shell=True)
-            p.wait()
+        disconnect()
     
 
 if __name__ == "__main__" :
